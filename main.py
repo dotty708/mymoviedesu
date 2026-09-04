@@ -28,8 +28,13 @@ def load_data():
     if name_col is not None:
         df["영화명"] = df[name_col]
     else:
-        # 끝내 못 찾으면 순번을 임시 제목으로 씁니다
         df["영화명"] = ["영화 " + str(i + 1) for i in range(len(df))]
+
+    # 개봉일 열도 이름이 다를 수 있으니 찾아서 '개봉일'이라는 날짜형 열로 만듭니다
+    open_col = pick_column(df, ["openDt", "open_dt", "open_date", "release_date", "개봉일"])
+    if open_col is not None:
+        # 20240315 / 2024-03-15 어떤 형태든 날짜로 바꿔 줍니다
+        df["개봉일"] = pd.to_datetime(df[open_col].astype(str), errors="coerce")
 
     return df
 
@@ -224,3 +229,43 @@ else:
     st.plotly_chart(fig7, width="stretch")
 
 st.text_input("이 그래프로 알 수 있는 것", key="note7")
+
+st.divider()
+
+# ── 그래프 8. 개봉일과 총 관객의 관계 ──
+st.header("8. 개봉일과 총 관객의 상관관계 (산점도)")
+
+MY_QUESTION = "개봉일과 총관객의 상관관계가 있는가"
+
+if "개봉일" not in df.columns:
+    st.warning("개봉일 열을 찾지 못했습니다. 위 확인 창에서 실제 열 이름을 살펴보세요.")
+else:
+    # 개봉일이나 총 관객이 비어 있는 행은 점을 찍을 수 없으므로 빼 줍니다
+    open_df = df.dropna(subset=["개봉일", "total_audi"])
+
+    fig8 = px.scatter(
+        open_df,
+        x="개봉일",              # 가로축: 날짜형이라 시간 순서대로 자동 정렬됩니다
+        y="total_audi",          # 세로축: 총 관객
+        title=MY_QUESTION,       # 그래프 제목 = 내 질문 그대로
+        hover_name="영화명",     # 점에 마우스를 올리면 영화명이 제목으로 뜸
+        labels={"개봉일": "개봉일", "total_audi": "총 관객(명)"},
+    )
+    fig8.update_traces(marker=dict(size=9, opacity=0.7))
+    # 마우스를 올렸을 때 날짜를 보기 좋은 형식으로 표시합니다
+    fig8.update_traces(
+        hovertemplate="개봉일 %{x|%Y-%m-%d}<br>총 관객 %{y:,.0f}명<extra></extra>"
+    )
+    fig8.update_layout(title_x=0.0)
+    st.plotly_chart(fig8, width="stretch")
+
+    # 날짜를 '기준일로부터 며칠째'라는 숫자로 바꾸면 상관계수를 계산할 수 있습니다
+    days = (open_df["개봉일"] - open_df["개봉일"].min()).dt.days
+    r = days.corr(open_df["total_audi"])
+
+    st.caption(
+        f"개봉 시점(기준일로부터 지난 날수)과 총 관객의 상관계수 r = **{r:.3f}** "
+        "— 0에 가까울수록 '개봉이 이르냐 늦냐'만으로는 관객 수를 설명하기 어렵다는 뜻입니다."
+    )
+
+st.text_input("이 그래프로 알 수 있는 것", key="note8")
